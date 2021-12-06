@@ -13,7 +13,7 @@ source .venv/bin/activate
 ```
 - Install required packages
 ```bash
-python -m pip install -r requirements
+python -m pip install -r requirements.txt
 ```
 
 - Install [bandit4mal](https://github.com/lyvd/bandit4mal) (See github page)

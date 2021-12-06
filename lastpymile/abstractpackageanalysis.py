@@ -5,37 +5,69 @@ import logging
 import os, tempfile
 import time
 from datetime import datetime
+from typing import Any
 
 from .utils import Utils
 from .pypackage import PyPackage, PyPackageRelease
 from .gitrepository import GitRepository
 
 class AbstractPackageAnalysis(ABC):
+  """
+    Abstarct class that contains the general execution process of an analyis for an PyPackage.
+      Mainly the analysis is diveded in 3 major step:
+      1- Sources scan: Sources are scanned and all required data for the sources is extrated/computed
+      2- Release scan: Release file is scanned and all required data for the release is extrated/computed
+      3- Analysis: sources data and release data are used to perform the actual analyisis.
 
-  def __init__(self, pyPackage:PyPackage, **options):
+    Methods listed below must be implemented:
+    _isReleaseSupported(self,release):
+    _checkPrerequisites(self,package:PyPackage) -> object:
+    _scanSources(self,repository:GitRepository,stage_data:StageStatisticsData) -> object:
+    _scanRelease(self,release:PyPackageRelease,stage_data:StageStatisticsData) -> object:
+    _analyzeRelease(self,release:PyPackageRelease,source_data:object,release_data:object):
+  """
+
+  def __init__(self, pyPackage:PyPackage, **options) -> None:
     self.pyPackage=pyPackage
     self.__logger=logging.getLogger("lastpymile."+type(self).__name__)
     self.__options=options
     self.__analysis_in_progress=False
     self._tmp_folder=None
     
-    cache_folder=self.__getOption("cache_folder",None)
+    cache_folder=self._getOption("cache_folder",None)
     if cache_folder is not None:
       cache_folder=os.path.join(cache_folder,pyPackage.getName()+"_"+pyPackage.getVersion())
       if not os.path.exists(cache_folder):
         os.makedirs(cache_folder)
     self._cache_folder=cache_folder
     
-
-  def __getOption(self,name,default_value=None):
+  def _getOption(self, name:str, default_value:Any=None) -> Any:
+    """
+      Utility method to get a user option if defined, otherwise return the specified default value
+        Parameters:
+          name (str): name of the option
+          default_value (Any): default value to return if the option is not specified (default:None)
+        Retrun (Any):
+          the specified option or the default value
+    """
     return self.__options[name] if name in self.__options else default_value
 
-  def _getTempFolder(self):
+  def _getTempFolder(self) ->str:
+    """
+      Get the current temporary folder. This method raise an exception if called otside an analyisis
+        Retrun (str):
+          the current temporary folder
+    """
     if self._tmp_folder is None:
       raise Exception("Invalid call to _getTempFolder")
     return self._tmp_folder
 
-  def startAnalysis(self):
+  def startAnalysis(self) -> map[str:Any]:
+    """
+      Start the analysis of the package
+        Retrun (map[str:Any]):
+          a json serializable map that contain the results of the analysis
+    """
     
     if self.__analysis_in_progress==True:
       raise AnalysisException("Analysis already in progress")
@@ -44,7 +76,7 @@ class AbstractPackageAnalysis(ABC):
     analysis_report=AbstractPackageAnalysis.AnalysisReport(self.pyPackage)
 
     prerequisite_error=self._checkPrerequisites(self.pyPackage)
-    if prerequisite_error!=True:
+    if prerequisite_error is not None :
       if isinstance(prerequisite_error,str):
         self.__logger.critical(prerequisite_error)
         analysis_report.failed(prerequisite_error)
@@ -52,12 +84,12 @@ class AbstractPackageAnalysis(ABC):
 
     
     try:
-      self._tmp_folder=self.__setupTempFolder(self.__getOption("tmp_folder"))
+      self._tmp_folder=self.__setupTempFolder(self._getOption("tmp_folder"))
       try:
         self.__doAnalysis(analysis_report)
         analysis_report.terminated()
       finally:
-        if not self.__getOption("keep_tmp_folder",False) and os.path.exists(self._getTempFolder()):
+        if not self._getOption("keep_tmp_folder",False) and os.path.exists(self._getTempFolder()):
           self.__logger.debug("Deleting temp folder {}".format(self._getTempFolder()))
           Utils.rmtree(self._getTempFolder())
     finally:
@@ -67,7 +99,13 @@ class AbstractPackageAnalysis(ABC):
     self.__logger.info("Package {} version:{} Analysis TERMINATED in {} seconds".format(self.pyPackage.getName(),self.pyPackage.getVersion(),analysis_report.getAnalysisDurationMs()/1000))
     return analysis_report.getReport()
 
-  def __doAnalysis(self,analysis_report:AnalysisReport):
+  def __doAnalysis(self, analysis_report:AnalysisReport) ->None:
+    """
+      Internal method that pratically perform the analysis
+        Parameters:
+          analysis_report (AnalysisReport): AnalysisReport object used to store and organize the analyis result
+    """
+
     self.__logger.info("Package '{}' version:{} Analysis STARTED".format(self.pyPackage.getName(),self.pyPackage.getVersion()))
     
     releases=[]
@@ -114,20 +152,15 @@ class AbstractPackageAnalysis(ABC):
         analysis_report.addResult(result)
         
         self.__logger.info("Analysis of release '{}' TERMINATED".format(release_fileName))
-        # if result.getStatus()==True:
-        #   self.__printColor("Analysis of release '{}' ".format(release_data[release_hash].getFileName()),'\033[91m')
-        # else:
-        #   self.__printColor("Found same file {} in sources".format(release_data[release_hash].getFileName()),'\033[92m')
-        
+      
       except AnalysisException as e:
         if self.__logger.isEnabledFor(logging.DEBUG):
           import traceback
           self.__logger.error("Analysis of release '{}' TERMINATED with an AN ERROR:\n{}".format(release_fileName,traceback.format_exc()))
         else:
           self.__logger.error("Analysis of release '{}' TERMINATED with an AN ERROR: {}".format(release_fileName,e))
-        
     
-  def __setupTempFolder(self,root_tmp_folder:str) -> str:
+  def __setupTempFolder(self, root_tmp_folder:str) -> str:
     """
     Setup a temporary folder that is used during the analysis
       Parameters:
@@ -148,11 +181,27 @@ class AbstractPackageAnalysis(ABC):
     return tmp_folder
 
   @abstractmethod
-  def _isReleaseSupported(self,release):
+  def _isReleaseSupported(self, release:PyPackageRelease) -> bool:
+    """
+      Test if the specified release type is supported. If not supported the release is not processed
+      This method mus be sublcassed
+        Parameters:
+          release (PyPackageRelease): the release object
+        Return (bool):
+          True if the release is supported, False otherwise
+    """
     return False
 
-  def __prepareSources(self,stage_data:StageStatisticsData) -> None:
-    repository_fodler=self.__getOption("repo_folder",None)
+  def __prepareSources(self, statistics:StageStatisticsData) -> Any:
+    """
+      Internal method that prepare the sources to be processed and call "_scanSources"
+        Parameters:
+          statistics (StageStatisticsData): object that can be used to report statistic data for the current analysis phase
+        Return (Any):
+          the object returned form _scanSources
+    """
+
+    repository_fodler=self._getOption("repo_folder",None)
     clone_folder=os.path.join(self._getTempFolder(),"sources")
     
     if repository_fodler is None and self._cache_folder is not None:
@@ -174,31 +223,68 @@ class AbstractPackageAnalysis(ABC):
       repository=GitRepository.cloneFromUrl(self.pyPackage.getGitRepositoryUrl(),clone_folder)
       git_rep=self.pyPackage.getGitRepositoryUrl()
       
-    stage_data.addStatistic("git_repository",git_rep)     
-    return self._scanSources(repository,stage_data)
-    
+    statistics.addStatistic("git_repository",git_rep)     
+    return self._scanSources(repository,statistics)
 
   @abstractmethod
-  def _checkPrerequisites(self,package:PyPackage) -> object:
+  def _checkPrerequisites(self, package:PyPackage) -> str:
+    """
+      Method called before the analysis start. Here all the prerequisites for the analysis are checked.
+      This method mus be sublcassed
+        Parameters:
+          package (PyPackage): the current package that will be analyzed
+        Return (str):
+          An error message that describe the error which prevent the analysis execution
+    """
     pass
 
   @abstractmethod
-  def _scanSources(self,repository:GitRepository,stage_data:StageStatisticsData) -> object:
+  def _scanSources(self, repository:GitRepository, statistics:StageStatisticsData) -> Any:
+    """
+      Abstract method where sources are scanned and prepocessed. This method shoud return an object that will be used in the next analysis phase (_analyzeRelease:source_data).
+      This method mus be sublcassed
+        Parameters:
+          repository (GitRepository): a GitRepository object
+          statistics (StageStatisticsData): object that can be used to report statistic data for the current analysis phase
+
+        Return (Any):
+          any object that can be used in the _analyzeRelease phase
+    """
     pass
 
   @abstractmethod
-  def _scanRelease(self,release:PyPackageRelease,stage_data:StageStatisticsData) -> object:
+  def _scanRelease(self,release:PyPackageRelease, statistics:StageStatisticsData) -> Any:
+    """
+      Abstract method where release file are aextracted and prepocessed. This method shoud return an object that will be used in the next analysis phase (_analyzeRelease:release_data).
+      This method mus be sublcassed
+        Parameters:
+          release (PyPackageRelease): a PyPackageRelease object
+          statistics (StageStatisticsData): object that can be used to report statistic data for the current analysis phase
+
+        Return (map[str:ReleaseFileDescriptor]):
+          any object that can be used in the _analyzeRelease phase
+    """
     pass
 
   @abstractmethod
-  def _analyzeRelease(self,release:PyPackageRelease,source_data:object,release_data:object):
+  def _analyzeRelease(self,release:PyPackageRelease, source_data:Any, release_data:Any) -> map[str:Any]:
+    """
+      Process the data from the previous phases and return a report
+        Parameters:
+          release (PyPackageRelease): the current release object that is analyzed
+          source_data (Any): the data returned from the "_scanSources" method
+          release_data (Any): the data returned from the "_scanRelease" method
+
+        Return (map[str:Any]):
+          A json serializable map containing the pakage anlaysis resutls data
+    """
     pass
 
-  def __printColor(self,text,color):
-    print("{}{}{}".format(color,text,'\033[0m') )
-    
   class AnalysisReport():
-    
+    """
+      Conveninece class to store the analyis statistics and resutls
+    """
+
     def __init__(self,pyPackage):
       self.start_time=time.time()
       self.analysis_report={
@@ -240,6 +326,9 @@ class AbstractPackageAnalysis(ABC):
 
 
 class StageStatisticsData():
+  """
+    Conveninece class usefult to store each analysis phase statistics data
+  """
 
   def __init__(self,stage_name):
     self.start_time=time.time()
@@ -258,7 +347,9 @@ class StageStatisticsData():
     return self.statistics
 
 class AnalysisException(Exception):
-
+  """
+   Exception class that wrap expection captured in this main class
+  """
   def __init__(self, message, trace_on_error=True):            
     super().__init__(message)
     self.trace_on_error=trace_on_error
