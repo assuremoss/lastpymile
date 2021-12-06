@@ -1,0 +1,10 @@
+.venv/
+.vscode/
+tmp/
+__pycache__/
+/lastpymile_dev*.py
+
+
+
+# Repository wide ignore mac DS_Store files
+.DS_Store
