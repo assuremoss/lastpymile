@@ -71,7 +71,7 @@ python lastpymile.py <package_name>[:<package_version>]
 
 
 ## Todo (upcoming changes)
-- Improve the techniques for finding Github URLs of a PyPI package
+- Improve the techniques for finding Github URLs of a PyPI package. We are working to integrate [py2src](https://github.com/simonepirocca/py2src) into LastPyMile.
 - Update the API documentation in the [docs](docs) directory
 
 
