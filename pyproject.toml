@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "lastpymile"
+version = "0.1.0"
+description = "A reimplementation of LastPyMile: A Python-based library to Identify the differences between build artifacts of PyPI packages and the respective source code repository"
+authors = ["vuduclyunitn <ducly.vu@unitn.it>"]
+license = "Apache License 2.0"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
