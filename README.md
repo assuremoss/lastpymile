@@ -35,22 +35,15 @@ The tool is best described in the following scientific papers, please cite these
 
 ## Installation
 *Requires python 3.9*
-
-- Suggested: Install venv and create virtual environment
-```bash
-python -m venv .vevn
-#activate venv in window
-.venv/Scripts/activate.bat
-#activate venv in linux
-source .venv/bin/activate
-```
-- Install required packages
-```bash
-python -m pip install -r requirements.txt
-```
-
-- Install [bandit4mal](https://github.com/lyvd/bandit4mal) (See github page)
-
+- At the root directory, run: ```poetry install``` to install package
+  dependencies. This will also install [pytest](https://docs.pytest.org/en/6.2.x/) for testing the project.
+- At the root directory, run: ```poetry shell``` to active the environment
+- 
+## Integrate `bandit4mal` into `LastPyMile`
+`bandit4mal` is built using Python2 to scan both Python2 and Python3 code. So, **please use python2 without any virutal environment when installing bandit4mal**. We use `bandit4mal` to scan the discrepancy and report the alerts associated with the discrepancy. `bandit4mal` requires [pbr>=2.0.0](https://pypi.org/project/pbr/)
+- Go to [tools](tools/), run ```git clone https://github.com/lyvd/bandit4mal```
+- Install `bandit4mal` by running this command ```sudo python2 setup.py install```
+- The bandit program will be installed at the path ```/usr/local/bin/bandit``` (MacOS and Ubuntu)
 ## Usage
 
 To list all available options:
